@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<a href="/feed">Feed</a>
+<a href="/profile">Profile</a>
+<a href="/logout">Logout</a>
+<html>
+<head>
+  <title>Edit Profile - <%= user.username %></title>
+</head>
+<body>
+  <h1>Edit Profile</h1>
+  <form action="/profile/edit" method="POST">
+    <label>Bio:<br>
+      <textarea name="bio" rows="4" cols="50"><%= user.bio %></textarea>
+    </label><br><br>
+
+    <label>Music URL:<br>
+      <input type="url" name="music" value="<%= user.music %>" placeholder="https://example.com/song.mp3 or YouTube link" />
+    </label><br><br>
+
+    <button type="submit">Save</button>
+  </form>
+  <p><a href="/profile">Cancel</a></p>
+</body>
+</html>

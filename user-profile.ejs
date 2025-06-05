@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title><%= user.username %>'s Profile</title>
+</head>
+<body>
+  <nav>
+    <a href="/feed">Feed</a>
+    <a href="/profile">My Profile</a>
+    <a href="/logout">Logout</a>
+  </nav>
+
+  <h1><%= user.username %>'s Profile</h1>
+
+  <p><strong>Bio:</strong> <%= user.bio || "No bio yet." %></p>
+
+  <p><strong>Followers:</strong> <%= followers %></p>
+  <p><strong>Following:</strong> <%= following %></p>
+
+  <% if (user.id !== currentUserId) { %>
+    <form method="POST" action="/user/<%= user.username %>/<%= isFollowing ? 'unfollow' : 'follow' %>">
+      <button type="submit"><%= isFollowing ? 'Unfollow' : 'Follow' %></button>
+    </form>
+  <% } %>
+
+  <h2>Posts</h2>
+  <% if (posts.length === 0) { %>
+    <p>No posts yet.</p>
+  <% } else { %>
+    <% posts.forEach(post => { %>
+      <div>
+        <p><%= post.content %></p>
+        <small><%= post.timestamp %></small>
+      </div>
+      <hr>
+    <% }) %>
+  <% } %>
+
+  <p><a href="/feed">Back to Feed</a></p>
+</body>
+</html>
