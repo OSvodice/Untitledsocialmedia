@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+app.get('/profile', requireLogin, (req, res) => {
+  console.log('Profile route accessed. UserId:', req.session.userId);
+  db.get('SELECT * FROM users WHERE id = ?', [req.session.userId], (err, user) => {
+    if (err) return res.sendStatus(500);
+    res.render('profile', { user });
+  });
+});
+<nav>
+  <a href="/feed">Feed</a> |
+  <a href="/profile">My Profile</a> |
+  <a href="/logout">Logout</a>
+</nav>
+<hr>
+<html>
+<head>
+  <title><%= user.username %>'s Profile</title>
+</head>
+<body>
+  <h1><%= user.username %>'s Profile</h1>
+  <p><strong>Bio:</strong> <%= user.bio || "No bio yet." %></p>
+  <p><strong>Music:</strong> 
+    <% if(user.music) { %>
+      <a href="<%= user.music %>" target="_blank"><%= user.music %></a>
+      <br>
+      <audio controls>
+        <source src="<%= user.music %>" type="audio/mpeg">
+        Your browser does not support the audio element.
+      </audio>
+    <% } else { %>
+      No music set.
+    <% } %>
+  </p>
+  <p><a href="/profile/edit">Edit Profile</a></p>
+  <p><a href="/feed">Back to Feed</a></p>
+</body>
+</html>

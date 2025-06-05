@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<%- include('partials/header') %>
+<html>
+<head>
+  <title>Feed | Untitled Social Media</title>
+</head>
+<body>
+  <h1>Welcome, <%= user.username %>!</h1>
+  <form action="/post" method="POST">
+    <textarea name="content" placeholder="What's on your mind?" required></textarea><br>
+    <button type="submit">Post</button>
+  </form>
+
+  <h2>Feed</h2>
+  <% posts.forEach(post => { %>
+    <div>
+      <strong><a href="/user/<%= post.username %>"><%= post.username %></a></strong>
+      <p><%= post.content %></p>
+      <small><%= post.timestamp %></small>
+    </div>
+    <hr>
+  <% }) %>
+
+  <p><a href="/logout">Log out</a></p>
+</body>
+</html>
