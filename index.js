@@ -198,5 +198,8 @@ app.post('/user/:username/unfollow', requireLogin, (req, res) => {
   });
 });
 
-app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
+app.listen(3000, '0.0.0.0', () => {
+  console.log('Server running at http://0.0.0.0:3000');
+});
+
 
