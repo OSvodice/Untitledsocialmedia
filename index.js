@@ -1,99 +1,120 @@
 const express = require('express');
 const path = require('path');
+const bodyParser = require('body-parser');
 const session = require('express-session');
 const sqlite3 = require('sqlite3').verbose();
-const bodyParser = require('body-parser');
 
 const app = express();
-const db = new sqlite3.Database('./database.sqlite');
+const db = new sqlite3.Database('database.sqlite');
 
-// Set up EJS
+// EJS and Public Folder
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Middleware
-app.use(express.static(path.join(__dirname, 'public')));
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(session({
-  secret: 'supersecretkey',
+  secret: 'mysecret',
   resave: false,
   saveUninitialized: false
 }));
 
-// Route: Home
+// Home Route
 app.get('/', (req, res) => {
-  if (req.session.username) return res.redirect('/feed');
-  res.redirect('/login');
+  if (req.session.username) {
+    res.redirect('/feed');
+  } else {
+    res.redirect('/login');
+  }
 });
 
-// Route: Login page
+// Login Page
 app.get('/login', (req, res) => {
   res.render('login');
 });
 
-// Route: Register page
+// Login Handler
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+
+  db.get('SELECT * FROM users WHERE username = ? AND password = ?', [username, password], (err, row) => {
+    if (err) {
+      console.error(err);
+      return res.send('Database error.');
+    }
+
+    if (row) {
+      req.session.username = username;
+      res.redirect('/feed');
+    } else {
+      res.send('Invalid username or password.');
+    }
+  });
+});
+
+// Register Page
 app.get('/register', (req, res) => {
   res.render('register');
 });
 
-// Route: Handle login
-app.post('/login', (req, res) => {
-  const { username, password } = req.body;
-
-  db.get('SELECT * FROM users WHERE username = ? AND password = ?', [username, password], (err, user) => {
-    if (err) return res.send('DB error');
-    if (!user) return res.send('Invalid login');
-
-    req.session.username = user.username;
-    res.redirect('/feed');
-  });
-});
-
-// Route: Handle registration
+// Register Handler
 app.post('/register', (req, res) => {
   const { username, password } = req.body;
 
   db.run('INSERT INTO users (username, password) VALUES (?, ?)', [username, password], function (err) {
-    if (err) return res.send('Registration error: ' + err.message);
+    if (err) {
+      console.error(err);
+      return res.send('Error during registration.');
+    }
 
     req.session.username = username;
     res.redirect('/feed');
   });
 });
 
-// Route: Feed page
+// Feed Page
 app.get('/feed', (req, res) => {
   if (!req.session.username) return res.redirect('/login');
 
   db.all('SELECT * FROM posts ORDER BY created_at DESC', (err, posts) => {
-    if (err) return res.send('Error loading posts');
+    if (err) {
+      console.error(err);
+      return res.send('Failed to load posts.');
+    }
 
-    res.render('feed', { posts });
+    res.render('feed', { posts, username: req.session.username });
   });
 });
 
-// Route: Create post
+// Post Handler
 app.post('/post', (req, res) => {
   const username = req.session.username;
   const content = req.body.content;
 
-  if (!username || !content) return res.redirect('/feed');
+  if (!username || !content.trim()) return res.redirect('/feed');
 
-  db.run('INSERT INTO posts (username, content, created_at) VALUES (?, ?, datetime("now"))', [username, content], (err) => {
-    if (err) return res.send('Post error: ' + err.message);
+  db.run('INSERT INTO posts (username, content, created_at) VALUES (?, ?, datetime("now"))',
+    [username, content],
+    (err) => {
+      if (err) {
+        console.error(err);
+        return res.send('Failed to create post.');
+      }
 
-    res.redirect('/feed');
-  });
+      res.redirect('/feed');
+    }
+  );
 });
 
-// Route: Logout
+// Logout
 app.get('/logout', (req, res) => {
   req.session.destroy();
-  res.redirect('/');
+  res.redirect('/login');
 });
 
-// Start server
+// Start Server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`App running at http://localhost:${PORT}`);
+  console.log(`Server running at http://0.0.0.0:${PORT}`);
 });
