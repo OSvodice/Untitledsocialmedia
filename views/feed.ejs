@@ -1,41 +1,133 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Untitled Social Media</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css">
-</head>
-<body>
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="#">Untitled</a>
-      <div class="collapse navbar-collapse">
-        <ul class="navbar-nav me-auto">
-          <li class="nav-item"><a class="nav-link" href="/feed">Feed</a></li>
-          <li class="nav-item"><a class="nav-link" href="/profile">Profile</a></li>
-        </ul>
-        <a class="btn btn-outline-light" href="/logout">Logout</a>
-      </div>
-    </div>
-  </nav>
+const express = require('express');
+const path = require('path');
+const bodyParser = require('body-parser');
+const session = require('express-session');
+const sqlite3 = require('sqlite3').verbose();
 
-  <div class="container mt-4">
-    <h1 class="mb-4">Latest Posts</h1>
+const app = express();
+const db = new sqlite3.Database('database.sqlite');
 
-    <% posts.forEach(function(post) { %>
-      <div class="post-card">
-        <h5><%= post.username %></h5>
-        <p><%= post.content %></p>
-      </div>
-    <% }) %>
+// EJS and Public Folder
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+app.use(express.static(path.join(__dirname, 'public')));
 
-    <form action="/post" method="POST" class="mt-4">
-      <div class="mb-3">
-        <textarea name="content" class="form-control" rows="3" placeholder="What's on your mind?"></textarea>
-      </div>
-      <button type="submit" class="btn btn-primary">Post</button>
-    </form>
-  </div>
-</body>
-</html>
+// Middleware
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(session({
+  secret: 'mysecret',
+  resave: false,
+  saveUninitialized: false
+}));
+
+// Home Route
+app.get('/', (req, res) => {
+  if (req.session.username) {
+    res.redirect('/feed');
+  } else {
+    res.redirect('/login');
+  }
+});
+
+// Login Page
+app.get('/login', (req, res) => {
+  res.render('login');
+});
+
+// Login Handler
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+
+  db.get('SELECT * FROM users WHERE username = ? AND password = ?', [username, password], (err, row) => {
+    if (err) {
+      console.error(err);
+      return res.send('Database error.');
+    }
+
+    if (row) {
+      req.session.username = username;
+      res.redirect('/feed');
+    } else {
+      res.send('Invalid username or password.');
+    }
+  });
+});
+
+// Register Page
+app.get('/register', (req, res) => {
+  res.render('register');
+});
+
+// Register Handler
+app.post('/register', (req, res) => {
+  const { username, password } = req.body;
+
+  db.run('INSERT INTO users (username, password) VALUES (?, ?)', [username, password], function (err) {
+    if (err) {
+      console.error(err);
+      return res.send('Error during registration.');
+    }
+
+    req.session.username = username;
+    res.redirect('/feed');
+  });
+});
+
+// Feed Page
+app.get('/feed', (req, res) => {
+  if (!req.session.username) return res.redirect('/login');
+
+  db.all(`
+    SELECT posts.*, users.username 
+    FROM posts 
+    JOIN users ON posts.user_id = users.id 
+    ORDER BY posts.timestamp DESC
+  `, (err, posts) => {
+    if (err) {
+      console.error(err);
+      return res.send('Failed to load posts.');
+    }
+
+    res.render('feed', { posts, username: req.session.username });
+  });
+});
+
+// Post Handler
+app.post('/post', (req, res) => {
+  const username = req.session.username;
+  const content = req.body.content;
+
+  if (!username || !content.trim()) return res.redirect('/feed');
+
+  // Get user id from username
+  db.get('SELECT id FROM users WHERE username = ?', [username], (err, user) => {
+    if (err || !user) {
+      console.error(err);
+      return res.redirect('/feed');
+    }
+
+    db.run(
+      'INSERT INTO posts (user_id, content, timestamp) VALUES (?, ?, datetime("now"))',
+      [user.id, content],
+      (err) => {
+        if (err) {
+          console.error(err);
+          return res.send('Failed to create post.');
+        }
+        res.redirect('/feed');
+      }
+    );
+  });
+});
+
+// Logout
+app.get('/logout', (req, res) => {
+  req.session.destroy();
+  res.redirect('/login');
+});
+
+// Start Server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running at http://0.0.0.0:${PORT}`);
+});
