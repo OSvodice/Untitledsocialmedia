@@ -3,16 +3,15 @@ const path = require('path');
 const bodyParser = require('body-parser');
 const session = require('express-session');
 const sqlite3 = require('sqlite3').verbose();
+const bcrypt = require('bcryptjs');
 
 const app = express();
 const db = new sqlite3.Database('database.sqlite');
 
-// EJS and Public Folder
+// Setup
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.use(express.static(path.join(__dirname, 'public')));
-
-// Middleware
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(session({
   secret: 'mysecret',
@@ -20,101 +19,102 @@ app.use(session({
   saveUninitialized: false
 }));
 
-// Home Route
-app.get('/', (req, res) => {
-  if (req.session.username) {
-    res.redirect('/feed');
-  } else {
-    res.redirect('/login');
-  }
-});
+// Middleware to require login
+function requireLogin(req, res, next) {
+  if (!req.session.username) return res.redirect('/login');
+  next();
+}
 
-// Login Page
-app.get('/login', (req, res) => {
-  res.render('login');
-});
-
-// Login Handler
-app.post('/login', (req, res) => {
-  const { username, password } = req.body;
-
-  db.get('SELECT * FROM users WHERE username = ? AND password = ?', [username, password], (err, row) => {
-    if (err) {
-      console.error(err);
-      return res.send('Database error.');
-    }
-
-    if (row) {
-      req.session.username = username;
-      res.redirect('/feed');
-    } else {
-      res.send('Invalid username or password.');
-    }
-  });
-});
-
-// Register Page
+// Register route
 app.get('/register', (req, res) => {
   res.render('register');
 });
 
-// Register Handler
-app.post('/register', (req, res) => {
+app.post('/register', async (req, res) => {
   const { username, password } = req.body;
+  if (!username || !password) return res.send('Username and password required');
 
-  db.run('INSERT INTO users (username, password) VALUES (?, ?)', [username, password], function (err) {
+  try {
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Insert user
+    db.run('INSERT INTO users (username, password) VALUES (?, ?)', [username, hashedPassword], function(err) {
+      if (err) {
+        if (err.message.includes('UNIQUE constraint failed')) {
+          return res.send('Username already taken');
+        }
+        console.error(err);
+        return res.send('Database error');
+      }
+      req.session.username = username;
+      res.redirect('/feed');
+    });
+  } catch (error) {
+    console.error(error);
+    res.send('Server error');
+  }
+});
+
+// Login route
+app.get('/login', (req, res) => {
+  res.render('login');
+});
+
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) return res.send('Username and password required');
+
+  db.get('SELECT * FROM users WHERE username = ?', [username], async (err, row) => {
     if (err) {
       console.error(err);
-      return res.send('Error during registration.');
+      return res.send('Database error');
     }
+    if (!row) return res.send('Invalid username or password');
+
+    const match = await bcrypt.compare(password, row.password);
+    if (!match) return res.send('Invalid username or password');
 
     req.session.username = username;
     res.redirect('/feed');
   });
 });
 
-// Feed Page
-app.get('/feed', (req, res) => {
-  if (!req.session.username) return res.redirect('/login');
-
+// Feed route (protected)
+app.get('/feed', requireLogin, (req, res) => {
   db.all('SELECT * FROM posts ORDER BY created_at DESC', (err, posts) => {
     if (err) {
       console.error(err);
       return res.send('Failed to load posts.');
     }
-
     res.render('feed', { posts, username: req.session.username });
   });
 });
 
-// Post Handler
-app.post('/post', (req, res) => {
+// Post creation (protected)
+app.post('/post', requireLogin, (req, res) => {
   const username = req.session.username;
   const content = req.body.content;
+  if (!content.trim()) return res.redirect('/feed');
 
-  if (!username || !content.trim()) return res.redirect('/feed');
-
-  db.run('INSERT INTO posts (username, content, created_at) VALUES (?, ?, datetime("now"))',
-    [username, content],
-    (err) => {
-      if (err) {
-        console.error(err);
-        return res.send('Failed to create post.');
-      }
-
-      res.redirect('/feed');
+  db.run('INSERT INTO posts (username, content) VALUES (?, ?)', [username, content], (err) => {
+    if (err) {
+      console.error(err);
+      return res.send('Failed to create post.');
     }
-  );
+    res.redirect('/feed');
+  });
 });
 
-// Logout
+// Logout route
 app.get('/logout', (req, res) => {
-  req.session.destroy();
-  res.redirect('/login');
+  req.session.destroy(() => {
+    res.redirect('/login');
+  });
 });
 
-// Start Server
+// Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server running at http://0.0.0.0:${PORT}`);
+  console.log(`Server running on http://0.0.0.0:${PORT}`);
 });
