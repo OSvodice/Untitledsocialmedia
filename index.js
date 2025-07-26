@@ -1,4 +1,3 @@
-app.use(express.static('public'));
 const express = require('express');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
@@ -25,16 +24,23 @@ function checkAuth(req, res, next) {
 // Middleware to require login and set userId shortcut
 function requireLogin(req, res, next) {
   if (!req.session.user) return res.redirect('/login');
-  req.session.userId = req.session.user.id; // handy shortcut
+  req.session.userId = req.session.user.id;
   next();
 }
 
 // Home → feed
 app.get('/', requireLogin, (req, res) => {
-  db.all(`SELECT posts.*, users.username FROM posts JOIN users ON posts.user_id = users.id ORDER BY timestamp DESC`, [], (err, posts) => {
-    if (err) return res.sendStatus(500);
-    res.render('feed', { user: req.session.user, posts });
-  });
+  db.all(
+    `SELECT posts.*, users.username 
+     FROM posts 
+     JOIN users ON posts.user_id = users.id 
+     ORDER BY timestamp DESC`,
+    [],
+    (err, posts) => {
+      if (err) return res.sendStatus(500);
+      res.render('feed', { user: req.session.user, posts });
+    }
+  );
 });
 
 // Register
@@ -76,7 +82,7 @@ app.get('/logout', (req, res) => {
   req.session.destroy(() => res.redirect('/login'));
 });
 
-// User’s own profile
+// Profile
 app.get('/profile', requireLogin, (req, res) => {
   db.get('SELECT * FROM users WHERE id = ?', [req.session.userId], (err, user) => {
     if (err) return res.sendStatus(500);
@@ -84,7 +90,6 @@ app.get('/profile', requireLogin, (req, res) => {
   });
 });
 
-// Edit profile
 app.get('/profile/edit', requireLogin, (req, res) => {
   db.get('SELECT * FROM users WHERE id = ?', [req.session.userId], (err, user) => {
     if (err) return res.sendStatus(500);
@@ -100,19 +105,7 @@ app.post('/profile/edit', requireLogin, (req, res) => {
   });
 });
 
-/* --- FOLLOWERS SYSTEM --- */
-
-// Create followers table if not exists (should be in your db.js but just for clarity)
-// db.run(`CREATE TABLE IF NOT EXISTS followers (
-//   id INTEGER PRIMARY KEY AUTOINCREMENT,
-//   follower_id INTEGER NOT NULL,
-//   following_id INTEGER NOT NULL,
-//   UNIQUE(follower_id, following_id),
-//   FOREIGN KEY(follower_id) REFERENCES users(id),
-//   FOREIGN KEY(following_id) REFERENCES users(id)
-// )`);
-
-// View any user's profile by username, with followers/following counts and posts
+// View other user's profile
 app.get('/user/:username', requireLogin, (req, res) => {
   const username = req.params.username;
 
@@ -157,7 +150,7 @@ app.get('/user/:username', requireLogin, (req, res) => {
   });
 });
 
-// Follow a user
+// Follow
 app.post('/user/:username/follow', requireLogin, (req, res) => {
   const username = req.params.username;
   const followerId = req.session.userId;
@@ -178,7 +171,7 @@ app.post('/user/:username/follow', requireLogin, (req, res) => {
   });
 });
 
-// Unfollow a user
+// Unfollow
 app.post('/user/:username/unfollow', requireLogin, (req, res) => {
   const username = req.params.username;
   const followerId = req.session.userId;
@@ -199,8 +192,7 @@ app.post('/user/:username/unfollow', requireLogin, (req, res) => {
   });
 });
 
-app.listen(3000, '0.0.0.0', () => {
-  console.log('Server running at http://0.0.0.0:3000');
+// Start the server
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running at http://0.0.0.0:${PORT}`);
 });
-
-
